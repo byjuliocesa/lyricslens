@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.julio0cesar.lyricslens</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>LyricsLens</name>
+  <summary>Synced lyrics over any window</summary>
+  <developer id="io.github.julio0cesar">
+    <name>Julio César</name>
+  </developer>
+
+  <description>
+    <p>
+      LyricsLens reads what your music player is playing, finds the lyrics
+      on LRCLIB, and shows the line being sung on top of everything on your
+      screen, a film or game in fullscreen included.
+    </p>
+    <ul>
+      <li>Follows the song by itself, from any player that reports its position</li>
+      <li>Karaoke mode fills the line as it is sung</li>
+      <li>Font, colour, size and position are yours to set</li>
+      <li>Lyrics already found work without internet</li>
+      <li>Wrong lyrics can be corrected by hand, and the choice is kept</li>
+    </ul>
+    <p>
+      Staying above fullscreen windows needs a desktop with the layer-shell
+      protocol: Hyprland, Sway, KDE Plasma, COSMIC and niri have it. On GNOME
+      it shows in a normal window instead. Songs playing in Firefox cannot be
+      followed, because Firefox does not report how far into the song it is.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.julio0cesar.lyricslens.desktop</launchable>
+  <provides>
+    <binary>lyricslens</binary>
+  </provides>
+
+  <url type="homepage">https://lyricslens.byjuliocesa.dev</url>
+  <url type="bugtracker">https://github.com/Julio0Cesar/lyricslens/issues</url>
+  <url type="vcs-browser">https://github.com/Julio0Cesar/lyricslens</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>The line being sung, over a film in fullscreen</caption>
+      <image>https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/assets/screenshots/overlay.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The preferences window</caption>
+      <image>https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/assets/screenshots/preferences.png</image>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#ebebe8</color>
+    <color type="primary" scheme_preference="dark">#0d0e10</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <releases>
+    <release version="0.1.38" date="2026-10-08">
+      <description>
+        <p>Spanish joins English and Portuguese, and a language can be added from a file.</p>
+      </description>
+    </release>
+  </releases>
+</component>

@@ -16,6 +16,18 @@
 
 use std::process::Command;
 
+/// The id the program runs under, on the bus and in the Flatpak.
+pub const APP_ID: &str = "io.github.julio0cesar.lyricslens";
+
+/// True inside the Flatpak sandbox.
+///
+/// Three things change there: `hyprctl` and `swaymsg` live on the host and
+/// cannot be run, Flatpak does the updating, and a copy started detached would
+/// die with the sandbox the moment the first one exits.
+pub fn sandboxed() -> bool {
+    std::path::Path::new("/.flatpak-info").exists()
+}
+
 /// The compositors that can be asked, and everything else.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compositor {
@@ -26,6 +38,9 @@ pub enum Compositor {
 }
 
 pub fn compositor() -> Compositor {
+    if sandboxed() {
+        return Compositor::Unknown;
+    }
     if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
         return Compositor::Hyprland;
     }
@@ -137,9 +152,15 @@ fn talk(program: &str, arguments: &[String]) -> Result<String, String> {
 /// The line to put in a configuration file, for a desktop that will not be
 /// asked.
 pub fn snippet(combination: &str, flag: &str) -> String {
-    let program = std::env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| "lyricslens".to_owned());
+    // Inside the sandbox the binary's path means nothing to the compositor,
+    // which runs the line on the host.
+    let program = if sandboxed() {
+        format!("flatpak run {APP_ID}")
+    } else {
+        std::env::current_exe()
+            .map(|path| shell_quote(&path.display().to_string()))
+            .unwrap_or_else(|_| "lyricslens".to_owned())
+    };
     let combination = if combination.trim().is_empty() {
         "SUPER, L"
     } else {
@@ -147,9 +168,9 @@ pub fn snippet(combination: &str, flag: &str) -> String {
     };
 
     let (modifiers, key) = split(combination).unwrap_or_default();
-    let run = format!("{} {flag}", shell_quote(&program));
+    let run = format!("{program} {flag}");
 
-    match compositor() {
+    match written_for() {
         Compositor::Sway => format!("bindsym {} exec {run}", sway_keys(&modifiers, &key)),
         // Two configuration languages, and a line in the wrong one does
         // nothing at all. Which file is there says which one this is.
@@ -160,6 +181,18 @@ pub fn snippet(combination: &str, flag: &str) -> String {
         ),
         _ => format!("bind = {modifiers}, {key}, exec, {run}"),
     }
+}
+
+/// The compositor the line is written for: the one running, even where it
+/// cannot be asked directly.
+fn written_for() -> Compositor {
+    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+        return Compositor::Hyprland;
+    }
+    if std::env::var_os("SWAYSOCK").is_some() {
+        return Compositor::Sway;
+    }
+    Compositor::Unknown
 }
 
 /// True where Hyprland is configured in Lua, which it has been since 0.56.

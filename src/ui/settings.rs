@@ -639,21 +639,25 @@ fn general_page(ctx: &Ctx, search: Option<&Search>) -> adw::PreferencesPage {
     player.add(&name);
     page.add(&player);
 
-    let startup = group("Startup", "");
-    let login = adw::SwitchRow::builder()
-        .title(t("Start on Login"))
-        .subtitle(t("Opens when you log in, with the overlay ready"))
-        .active(autostart::enabled())
-        .build();
-    login.connect_active_notify(|row| {
-        if let Err(error) = autostart::set(row.is_active()) {
-            tracing::warn!(%error, "could not change the autostart entry");
-            // Says what is true, not what was asked for.
-            row.set_active(autostart::enabled());
-        }
-    });
-    startup.add(&login);
-    page.add(&startup);
+    // Starting with the session is a file on the host, out of the sandbox's
+    // reach; Flatpak users get it from their desktop's own startup settings.
+    if !crate::desktop::sandboxed() {
+        let startup = group("Startup", "");
+        let login = adw::SwitchRow::builder()
+            .title(t("Start on Login"))
+            .subtitle(t("Opens when you log in, with the overlay ready"))
+            .active(autostart::enabled())
+            .build();
+        login.connect_active_notify(|row| {
+            if let Err(error) = autostart::set(row.is_active()) {
+                tracing::warn!(%error, "could not change the autostart entry");
+                // Says what is true, not what was asked for.
+                row.set_active(autostart::enabled());
+            }
+        });
+        startup.add(&login);
+        page.add(&startup);
+    }
 
     if let Some(version) = search.and_then(|search| search.newer.borrow().clone()) {
         let news = group("Update Available", "");

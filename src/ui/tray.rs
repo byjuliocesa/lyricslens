@@ -154,7 +154,9 @@ pub fn start() -> async_channel::Receiver<Command> {
                 commands,
                 icon: icon(),
             };
-            match tray.spawn() {
+            // A sandbox may only own the names it was granted, and the
+            // icon is found by its connection anyway.
+            match tray.disable_dbus_name(crate::desktop::sandboxed()).spawn() {
                 // The handle has to outlive the icon, and the icon lives as long
                 // as the program does.
                 Ok(handle) => std::mem::forget(handle),

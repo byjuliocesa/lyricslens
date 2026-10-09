@@ -60,6 +60,16 @@ pub fn handle() -> Option<u8> {
         paths();
         return Some(0);
     }
+    if has(&["--upgrade", "--uninstall"]) && crate::desktop::sandboxed() {
+        let verb = if has(&["--upgrade"]) {
+            "update"
+        } else {
+            "uninstall"
+        };
+        eprintln!("lyricslens: this copy came from Flatpak, which looks after it:");
+        eprintln!("  flatpak {verb} {}", crate::desktop::APP_ID);
+        return Some(1);
+    }
     if has(&["--upgrade"]) {
         return Some(installer(&[]));
     }

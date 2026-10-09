@@ -24,7 +24,7 @@ use lyricslens::ui::tray;
 /// be, and a tenth of a second is below what anyone sees.
 const TICK: Duration = Duration::from_millis(100);
 
-const ID: &str = "io.github.julio0cesar.lyricslens";
+const ID: &str = lyricslens::desktop::APP_ID;
 
 /// How long the overlay is allowed to explain itself before going quiet.
 ///
@@ -82,7 +82,7 @@ fn main() -> glib::ExitCode {
 
     // The overlay is meant to sit there all day, so the terminal comes back
     // straight away. `--foreground` is for watching the log.
-    if !lyricslens::cli::wants_foreground() {
+    if !lyricslens::cli::wants_foreground() && !lyricslens::desktop::sandboxed() {
         return glib::ExitCode::from(lyricslens::cli::detach());
     }
 

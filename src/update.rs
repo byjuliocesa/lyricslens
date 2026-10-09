@@ -18,7 +18,9 @@ const STAMP: &str = "last-update-check";
 
 /// The newest release, when it is newer than this build and it is time to ask.
 pub async fn newer_than_this(http: &reqwest::Client) -> Option<String> {
-    if !due() {
+    // Flatpak updates the program with everything else; news of a release
+    // would only point at an installer that does not apply.
+    if crate::desktop::sandboxed() || !due() {
         return None;
     }
     stamp();
