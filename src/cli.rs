@@ -6,7 +6,7 @@
 
 use std::process::Command;
 
-const INSTALLER: &str = "https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh";
+const INSTALLER: &str = "https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh";
 
 const HELP: &str = "\
 LyricsLens — synced lyrics over any window
@@ -37,7 +37,7 @@ Environment:
   LYRICSLENS_PLAYER  part of a player's bus name, when more than one is open
   RUST_LOG           how much to log, for example lyricslens=debug
 
-Home: https://github.com/Julio0Cesar/lyricslens
+Home: https://github.com/byjuliocesa/lyricslens
 ";
 
 /// Handles the arguments that never reach the interface.
