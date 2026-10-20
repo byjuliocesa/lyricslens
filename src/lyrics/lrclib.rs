@@ -20,7 +20,7 @@ const BASE: &str = "https://lrclib.net";
 pub const AGENT: &str = concat!(
     "LyricsLens/",
     env!("CARGO_PKG_VERSION"),
-    " (https://github.com/Julio0Cesar/lyricslens)"
+    " (https://github.com/byjuliocesa/lyricslens)"
 );
 
 /// How far a search result's duration may sit from the one being played.

@@ -41,15 +41,15 @@
 
 <h2>Install</h2>
 <p>Into <code>~/.local</code>, no root, nothing outside your home directory.</p>
-<pre><code>curl -fsSL https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh | sh</code></pre>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh | sh</code></pre>
 <p>Then run <code>lyricslens</code>, or <code>lls</code>. It puts an icon in the status bar and
    stays out of the way.</p>
 
 <h2>Packages</h2>
 <p class="files">
-  <a href="https://github.com/Julio0Cesar/lyricslens/releases/latest/download/lyricslens-${VERSION}-x86_64.deb">.deb (${VERSION})</a>
-  <a href="https://github.com/Julio0Cesar/lyricslens/releases/latest/download/lyricslens-${VERSION}-x86_64.rpm">.rpm (${VERSION})</a>
-  <a href="https://github.com/Julio0Cesar/lyricslens/releases/latest">every release</a>
+  <a href="https://github.com/byjuliocesa/lyricslens/releases/latest/download/lyricslens-${VERSION}-x86_64.deb">.deb (${VERSION})</a>
+  <a href="https://github.com/byjuliocesa/lyricslens/releases/latest/download/lyricslens-${VERSION}-x86_64.rpm">.rpm (${VERSION})</a>
+  <a href="https://github.com/byjuliocesa/lyricslens/releases/latest">every release</a>
 </p>
 <p>Install a package with <code>apt install ./file.deb</code> rather than <code>dpkg -i</code>:
    only the first pulls in what it needs.</p>
@@ -72,25 +72,25 @@
    installs from them gets new versions with the rest of its updates.</p>
 
 <h2>Debian, Ubuntu, Mint</h2>
-<pre><code>curl -fsSL https://julio0cesar.github.io/lyricslens/lyricslens.asc \
+<pre><code>curl -fsSL https://byjuliocesa.github.io/lyricslens/lyricslens.asc \
   | sudo gpg --dearmor -o /usr/share/keyrings/lyricslens.gpg
 
-echo "deb [signed-by=/usr/share/keyrings/lyricslens.gpg] https://julio0cesar.github.io/lyricslens/apt ./" \
+echo "deb [signed-by=/usr/share/keyrings/lyricslens.gpg] https://byjuliocesa.github.io/lyricslens/apt ./" \
   | sudo tee /etc/apt/sources.list.d/lyricslens.list
 
 sudo apt update &amp;&amp; sudo apt install lyricslens</code></pre>
 
 <h2>Fedora, openSUSE</h2>
-<pre><code>sudo rpm --import https://julio0cesar.github.io/lyricslens/lyricslens.asc
+<pre><code>sudo rpm --import https://byjuliocesa.github.io/lyricslens/lyricslens.asc
 
 sudo tee /etc/yum.repos.d/lyricslens.repo &lt;&lt;'REPO'
 [lyricslens]
 name=LyricsLens
-baseurl=https://julio0cesar.github.io/lyricslens/rpm
+baseurl=https://byjuliocesa.github.io/lyricslens/rpm
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=https://julio0cesar.github.io/lyricslens/lyricslens.asc
+gpgkey=https://byjuliocesa.github.io/lyricslens/lyricslens.asc
 REPO
 
 sudo dnf install lyricslens</code></pre>
@@ -107,8 +107,8 @@ sudo rm /etc/apt/sources.list.d/lyricslens.list /usr/share/keyrings/lyricslens.g
 sudo rm /etc/yum.repos.d/lyricslens.repo</code></pre>
 
 <footer>
-  <a href="https://github.com/Julio0Cesar/lyricslens">Source</a> ·
-  <a href="https://github.com/Julio0Cesar/lyricslens/issues">Something wrong?</a> ·
+  <a href="https://github.com/byjuliocesa/lyricslens">Source</a> ·
+  <a href="https://github.com/byjuliocesa/lyricslens/issues">Something wrong?</a> ·
   MIT
 </footer>
 

@@ -2,11 +2,13 @@
 # Installs LyricsLens into ~/.local. Nothing outside your home directory is
 # touched, and no sudo is asked for.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh | sh
 #   ... | sh -s -- --remove
 set -eu
 
-REPO="Julio0Cesar/lyricslens"
+REPO="byjuliocesa/lyricslens"
+# The API by repository id, which survives a rename of the owner or the name.
+API="https://api.github.com/repositories/1338589467"
 NAME="lyricslens"
 SHORT="lls"
 PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -99,7 +101,7 @@ check_glibc() {
 
 TAG="${LYRICSLENS_VERSION:-}"
 if [ -z "$TAG" ]; then
-    TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+    TAG=$(curl -fsSL "$API/releases/latest" \
         | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1)
 fi
 [ -n "$TAG" ] || die "could not find the latest release"

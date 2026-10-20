@@ -10,9 +10,9 @@ LyricsLens reads what your player is playing, finds the lyrics on
 [LRCLIB](https://lrclib.net), and draws the line being sung on a layer above
 everything else — including a window in fullscreen.
 
-[![CI](https://github.com/Julio0Cesar/lyricslens/actions/workflows/ci.yml/badge.svg)](https://github.com/Julio0Cesar/lyricslens/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/Julio0Cesar/lyricslens?label=release)](https://github.com/Julio0Cesar/lyricslens/releases/latest)
-[![License](https://img.shields.io/github/license/Julio0Cesar/lyricslens)](LICENSE)
+[![CI](https://github.com/byjuliocesa/lyricslens/actions/workflows/ci.yml/badge.svg)](https://github.com/byjuliocesa/lyricslens/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/byjuliocesa/lyricslens?label=release)](https://github.com/byjuliocesa/lyricslens/releases/latest)
+[![License](https://img.shields.io/github/license/byjuliocesa/lyricslens)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-stable-b7410e)](https://www.rust-lang.org)
 
 </div>
@@ -28,29 +28,29 @@ everything else — including a window in fullscreen.
 Into `~/.local`, no sudo, nothing outside your home directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh | sh
 ```
 
 To read it first — and you should:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh -o install.sh
 less install.sh && sh install.sh
 ```
 
 To remove it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/install.sh | sh -s -- --remove
+curl -fsSL https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/install.sh | sh -s -- --remove
 ```
 
 <details>
 <summary>Debian, Ubuntu and Mint</summary>
 
 From the repository, so it updates with the rest of the system —
-[the instructions are here](https://julio0cesar.github.io/lyricslens/packages/).
+[the instructions are here](https://byjuliocesa.github.io/lyricslens/packages/).
 
-Or download the `.deb` from [the latest release](https://github.com/Julio0Cesar/lyricslens/releases/latest) and:
+Or download the `.deb` from [the latest release](https://github.com/byjuliocesa/lyricslens/releases/latest) and:
 
 ```bash
 sudo apt install ./lyricslens-*-x86_64.deb
@@ -74,7 +74,7 @@ sudo dnf install ./lyricslens-*-x86_64.rpm
 <summary>On Arch, from the PKGBUILD</summary>
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Julio0Cesar/lyricslens/main/packaging/PKGBUILD
+curl -fsSLO https://raw.githubusercontent.com/byjuliocesa/lyricslens/main/packaging/PKGBUILD
 makepkg -si
 ```
 

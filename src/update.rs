@@ -7,7 +7,8 @@
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
-const RELEASES: &str = "https://api.github.com/repos/Julio0Cesar/lyricslens/releases/latest";
+// By repository id rather than owner/name: the id survives a rename of either.
+const RELEASES: &str = "https://api.github.com/repositories/1338589467/releases/latest";
 
 /// How long to leave it before looking again. A program that sits open all day
 /// has no business asking more often than this.
