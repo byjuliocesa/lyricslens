@@ -102,6 +102,9 @@ struct Ctx {
 
 impl Ctx {
     fn change(&self, edit: impl FnOnce(&mut Settings)) {
+        // Read again first: the overlay saves too, when the lines are dragged,
+        // and a copy taken when this window opened would put them back.
+        *self.settings.borrow_mut() = Settings::load();
         edit(&mut self.settings.borrow_mut());
         save(&self.settings.borrow(), &self.app);
         self.preview.refresh(&self.settings.borrow());

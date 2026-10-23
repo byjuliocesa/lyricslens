@@ -18,7 +18,7 @@ use gtk::pango;
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, CssProvider, Label};
 use gtk4 as gtk;
-use gtk4_layer_shell::{Edge, Layer, LayerShell};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 use crate::error::Error;
 use crate::store::settings::{Position, Settings};
@@ -448,7 +448,13 @@ impl Overlay {
                 running: false,
             })),
             placement: Rc::new(RefCell::new(Placement {
-                settings: settings.clone(),
+                // Moving the overlay is something done now, not a way to
+                // start: a switch left on from last time would claim the mode
+                // is on while every click went straight through.
+                settings: Settings {
+                    movable: false,
+                    ..settings.clone()
+                },
                 grabbed: None,
                 positioning: false,
             })),
@@ -456,8 +462,16 @@ impl Overlay {
         };
 
         overlay.shape(settings);
+        if settings.movable {
+            let mut off = settings.clone();
+            off.movable = false;
+            if let Err(error) = off.save() {
+                tracing::warn!(%error, "could not switch the positioning mode off");
+            }
+        }
         overlay.place();
         overlay.watch_drag();
+        overlay.watch_keys();
         // Placed again once there is a surface: which screen this is comes
         // from the surface, and the position is kept per screen, so the first
         // placement has nothing to look the position up by.
@@ -732,20 +746,22 @@ impl Overlay {
         self.provider
             .load_from_string(&style(settings, &format!("window.{OVERLAY}")));
         self.shape(settings);
-        let movable = settings.movable;
-        {
-            let mut placement = self.placement.borrow_mut();
-            placement.settings = settings.clone();
-            placement.positioning = movable;
+        // While the lines are being dragged the overlay is the one that knows
+        // where they are; the window that switched the mode off only knows
+        // where they were when it opened.
+        let dragging = self.placement.borrow().positioning;
+        let mut next = settings.clone();
+        if dragging {
+            let placement = self.placement.borrow();
+            next.positions = placement.settings.positions.clone();
+            next.left_margin = placement.settings.left_margin;
+            next.bottom_margin = placement.settings.bottom_margin;
         }
-        if movable {
-            self.window.add_css_class(POSITIONING);
-            self.lines.set_visible(true);
-        } else {
-            self.window.remove_css_class(POSITIONING);
+        self.placement.borrow_mut().settings = next;
+        self.set_positioning(settings.movable);
+        if dragging && !settings.movable {
+            self.save_position();
         }
-        self.place();
-        self.set_click_through(!movable);
     }
 
     /// Brings the overlay back to the screen, which is what a second launch
@@ -772,14 +788,27 @@ impl Overlay {
     /// cursor's own frame of reference along. So the mode grows the surface to
     /// cover the screen and moves the lines inside it, which stays still.
     pub fn toggle_positioning(&self) {
-        let positioning = {
+        let positioning = !self.placement.borrow().positioning;
+        self.set_positioning(positioning);
+        if !positioning {
+            self.save_position();
+        }
+    }
+
+    /// Enters or leaves the positioning mode, without saving anything: the
+    /// preferences window saves for itself, the shortcut through
+    /// `toggle_positioning`.
+    fn set_positioning(&self, positioning: bool) {
+        {
             let mut placement = self.placement.borrow_mut();
-            placement.positioning = !placement.positioning;
+            placement.positioning = positioning;
             // The switch in the preferences window reads this, so the two
             // cannot be left disagreeing.
-            placement.settings.movable = placement.positioning;
-            placement.positioning
-        };
+            placement.settings.movable = positioning;
+            if !positioning {
+                placement.grabbed = None;
+            }
+        }
 
         if positioning {
             self.window.add_css_class(POSITIONING);
@@ -787,24 +816,57 @@ impl Overlay {
             self.lines.set_visible(true);
             let row = &self.rows[self.highlighted.get()];
             if row.text().is_empty() {
-                row.set_text("drag me");
+                row.set_text(&crate::i18n::t("drag me"));
                 row.set_weight(1.0);
             }
         } else {
             self.window.remove_css_class(POSITIONING);
-            let placement = self.placement.borrow();
-            if let Err(error) = placement.settings.save() {
-                tracing::warn!(%error, "could not save where the overlay was left");
+        }
+        // Escape ends the mode, which needs the keyboard; the rest of the time
+        // the overlay must never take it from the window being typed in.
+        if self.layer_shell {
+            self.window.set_keyboard_mode(if positioning {
+                KeyboardMode::OnDemand
             } else {
-                tracing::info!(
-                    bottom = placement.settings.bottom_margin,
-                    left = ?placement.settings.left_margin,
-                    "overlay position saved"
-                );
-            }
+                KeyboardMode::None
+            });
         }
         self.place();
         self.set_click_through(!positioning);
+    }
+
+    fn save_position(&self) {
+        let placement = self.placement.borrow();
+        if let Err(error) = placement.settings.save() {
+            tracing::warn!(%error, "could not save where the overlay was left");
+        } else {
+            tracing::info!(
+                bottom = placement.settings.bottom_margin,
+                left = ?placement.settings.left_margin,
+                "overlay position saved"
+            );
+        }
+    }
+
+    /// Escape or Enter puts the overlay down where it is, for when the
+    /// preferences window is out of reach.
+    fn watch_keys(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.connect_key_pressed({
+            let overlay = self.clone();
+            move |_, key, _, _| {
+                let done = matches!(
+                    key,
+                    gtk::gdk::Key::Escape | gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter
+                );
+                if done && overlay.placement.borrow().positioning {
+                    overlay.toggle_positioning();
+                    return gtk::glib::Propagation::Stop;
+                }
+                gtk::glib::Propagation::Proceed
+            }
+        });
+        self.window.add_controller(keys);
     }
 
     /// Lets the pointer through to whatever is underneath, or takes it.
@@ -815,15 +877,50 @@ impl Overlay {
         if through {
             // An empty region means the surface wants no pointer events at all.
             surface.set_input_region(Some(&gtk::cairo::Region::create()));
-        } else {
+            return;
+        }
+        let region = match self.grab_area() {
+            Some(area) => area,
             // Not the window's own size, which is the trap here: this runs
-            // while the surface is still the small one it was before the
+            // while the surface may still be the small one it was before the
             // positioning mode asked the compositor to grow it to the whole
             // screen. A region that size covers the top-left corner and
-            // nothing else, and the lines — at the bottom — cannot be grabbed.
-            let whole = gtk::cairo::RectangleInt::new(0, 0, EVERYTHING, EVERYTHING);
-            surface.set_input_region(Some(&gtk::cairo::Region::create_rectangle(&whole)));
+            // nothing else, and the lines, at the bottom, cannot be grabbed.
+            None => gtk::cairo::RectangleInt::new(0, 0, EVERYTHING, EVERYTHING),
+        };
+        surface.set_input_region(Some(&gtk::cairo::Region::create_rectangle(&region)));
+    }
+
+    /// The lines and a margin around them, in the coordinates of the surface
+    /// that covers the screen while they are being moved.
+    ///
+    /// Only that much takes the pointer. A surface over the whole screen that
+    /// took every click left the preferences window, the one place to switch
+    /// the mode off, impossible to reach.
+    fn grab_area(&self) -> Option<gtk::cairo::RectangleInt> {
+        const AROUND: i32 = 24;
+        if !self.layer_shell {
+            return None;
         }
+        let surface = self.window.surface()?;
+        let monitor = surface.display().monitor_at_surface(&surface)?;
+        let height = monitor.geometry().height();
+        let (width, tall) = match (self.lines.width(), self.lines.height()) {
+            (0, _) | (_, 0) => {
+                let (_, w, _, _) = self.lines.measure(gtk::Orientation::Horizontal, -1);
+                let (_, h, _, _) = self.lines.measure(gtk::Orientation::Vertical, w);
+                (w, h)
+            }
+            size => size,
+        };
+        let left = self.lines.margin_start();
+        let bottom = self.lines.margin_bottom();
+        Some(gtk::cairo::RectangleInt::new(
+            (left - AROUND).max(0),
+            (height - bottom - tall - AROUND).max(0),
+            width + 2 * AROUND,
+            tall + 2 * AROUND,
+        ))
     }
 
     /// Turns a drag into margins, live, while the positioning mode is on.
@@ -862,6 +959,7 @@ impl Overlay {
                     placement.settings.set_position_on(screen.as_deref(), at);
                 }
                 overlay.place();
+                overlay.set_click_through(false);
             }
         });
 
