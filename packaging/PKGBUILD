@@ -1,6 +1,6 @@
 # Maintainer: Julio Cesar <julio@byjuliocesa.dev>
 pkgname=lyricslens
-pkgver=0.1.39
+pkgver=0.1.40
 pkgrel=1
 pkgdesc="Synced lyrics overlay for Linux"
 arch=('x86_64')
