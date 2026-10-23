@@ -1,6 +1,6 @@
 [package]
 name = "lyricslens"
-version = "0.1.43"
+version = "0.1.44"
 description = "Synchronized lyrics overlay for the desktop"
 edition = "2024"
 license = "MIT"
