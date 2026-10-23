@@ -384,10 +384,12 @@ impl State {
                 self.searching = false;
                 self.publish_song();
                 *self.report.borrow_mut() = match &self.lyrics {
-                    Some(lyrics) => {
-                        format!("{} {}", lyrics.lines.len(), t("lines being followed."))
-                    }
-                    None => t("No synced lyrics found for this one."),
+                    Some(lyrics) => lyricslens::i18n::count(
+                        lyrics.lines.len(),
+                        "{n} line being followed",
+                        "{n} lines being followed",
+                    ),
+                    None => t("No synced lyrics found for this one"),
                 };
             }
             Update::Player(name) => {
