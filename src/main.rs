@@ -133,9 +133,11 @@ fn main() -> glib::ExitCode {
         // now, and where the answers land while it is open.
         let playing: Rc<RefCell<Track>> = Rc::new(RefCell::new(Track::default()));
         let (found, candidates) = async_channel::bounded(4);
+        let (open_players, players) = async_channel::bounded(4);
         let search = preferences::Search {
             requests: requests.clone(),
             candidates,
+            players,
             playing: Rc::clone(&playing),
             report: Rc::clone(&report),
             newer: Rc::clone(&newer),
@@ -195,6 +197,9 @@ fn main() -> glib::ExitCode {
                     // wants them; the state has no use for a search.
                     app::Update::Candidates(results) => {
                         let _ = found.send(results).await;
+                    }
+                    app::Update::Players(open) => {
+                        let _ = open_players.send(open).await;
                     }
                     update => {
                         if let app::Update::Media(Event::TrackChanged(track)) = &update {
@@ -428,7 +433,7 @@ impl State {
             Update::Media(Event::PositionStalled) => self.stalled = true,
             // Answered straight to the window that asked; nothing here wants
             // a list of recordings.
-            Update::Candidates(_) => {}
+            Update::Candidates(_) | Update::Players(_) => {}
             Update::Art(path) => self.art = path,
             Update::NewVersion(version) => {
                 *self.newer.borrow_mut() = Some(version);

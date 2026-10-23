@@ -34,6 +34,11 @@ pub enum Request {
     Search { artist: String, title: String },
     /// Use these lyrics for the track playing now, and remember the choice.
     Choose(Box<Candidate>),
+    /// The players open right now, to choose from.
+    Players,
+    /// Follow this player from now on, by the short name in its bus name, or
+    /// whichever is playing when there is none.
+    Follow(Option<String>),
 }
 
 /// Everything the interface needs to know.
@@ -54,6 +59,8 @@ pub enum Update {
     Candidates(Vec<Candidate>),
     /// A release newer than this build exists. Nothing is installed by it.
     NewVersion(String),
+    /// The answer to [`Request::Players`].
+    Players(Vec<mpris::Choice>),
 }
 
 /// Starts the worker and hands back the receiving end.
@@ -107,7 +114,7 @@ async fn run(
 
     // The variable wins over the file: it is how a single run is pointed at a
     // different player without editing anything.
-    let wanted = std::env::var(OVERRIDE)
+    let mut wanted = std::env::var(OVERRIDE)
         .ok()
         .filter(|wanted| !wanted.is_empty())
         .or(settings.player);
@@ -116,18 +123,48 @@ async fn run(
         if updates.is_closed() {
             return;
         }
-        if let Err(error) = once(&updates, &requests, wanted.as_deref()).await {
-            tracing::warn!(%error, "lost the player");
+        match once(&updates, &requests, wanted.as_deref()).await {
+            // Another player was chosen: follow it now rather than after the
+            // pause, which is for a bus with nothing on it.
+            Ok(Some(chosen)) => {
+                wanted = chosen;
+                continue;
+            }
+            Ok(None) => {}
+            Err(error) => tracing::warn!(%error, "lost the player"),
         }
-        tokio::time::sleep(RETRY).await;
+
+        // Nothing to follow yet, but the preferences window may still ask
+        // which players there are, or pick one.
+        let pause = tokio::time::sleep(RETRY);
+        tokio::pin!(pause);
+        loop {
+            tokio::select! {
+                () = &mut pause => break,
+                request = requests.recv() => match request {
+                    Ok(Request::Follow(chosen)) => {
+                        wanted = chosen;
+                        break;
+                    }
+                    Ok(request) => {
+                        if let Ok(client) = Client::new() {
+                            answer(&client, request, None, &updates).await;
+                        }
+                    }
+                    Err(_) => return,
+                },
+            }
+        }
     }
 }
 
+/// Follows one player until it leaves, or until another is chosen, which is
+/// what comes back: `Some` with the new choice.
 async fn once(
     updates: &async_channel::Sender<Update>,
     requests: &async_channel::Receiver<Request>,
     wanted: Option<&str>,
-) -> Result<(), Error> {
+) -> Result<Option<Option<String>>, Error> {
     let connection = Connection::session().await?;
     let Some(name) = mpris::pick(&connection, wanted).await? else {
         tracing::debug!("no MPRIS player on the bus");
@@ -135,14 +172,14 @@ async fn once(
         let _ = updates
             .send(Update::Media(Event::TrackChanged(Track::default())))
             .await;
-        return Ok(());
+        return Ok(None);
     };
     if updates
         .send(Update::Player(name.as_str().to_owned()))
         .await
         .is_err()
     {
-        return Ok(());
+        return Ok(None);
     }
 
     let (events, incoming) = async_channel::bounded(64);
@@ -157,6 +194,7 @@ async fn once(
     let mut lookup: Option<JoinHandle<()>> = None;
     let mut cover: Option<JoinHandle<()>> = None;
     let mut playing: Option<Track> = None;
+    let mut chosen = None;
 
     loop {
         let event = tokio::select! {
@@ -166,6 +204,10 @@ async fn once(
             },
             request = requests.recv() => {
                 match request {
+                    Ok(Request::Follow(other)) => {
+                        chosen = Some(other);
+                        break;
+                    }
                     Ok(request) => {
                         answer(&client, request, playing.clone(), updates).await;
                         continue;
@@ -213,7 +255,7 @@ async fn once(
     let _ = updates
         .send(Update::Media(Event::TrackChanged(Track::default())))
         .await;
-    Ok(())
+    Ok(chosen)
 }
 
 /// Handles what the preferences window asked for.
@@ -251,6 +293,22 @@ async fn answer(
             tracing::info!(lines = lyrics.lines.len(), "lyrics chosen by hand");
             let _ = updates.send(Update::Lyrics(Box::new(Some(lyrics)))).await;
         }
+        Request::Players => {
+            let found = match Connection::session().await {
+                Ok(connection) => mpris::choices(&connection).await.unwrap_or_else(|error| {
+                    tracing::warn!(%error, "could not list the players");
+                    Vec::new()
+                }),
+                Err(error) => {
+                    tracing::warn!(%error, "no session bus to list the players on");
+                    Vec::new()
+                }
+            };
+            let _ = updates.send(Update::Players(found)).await;
+        }
+        // Taken by the loops that follow a player, which are the ones that
+        // can act on it.
+        Request::Follow(_) => {}
     }
 }
 
