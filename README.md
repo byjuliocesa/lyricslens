@@ -226,11 +226,13 @@ X11 window.
 | --- | --- | --- |
 | Hyprland | tested | yes |
 | Sway, KWin, COSMIC, niri, Wayfire | expected to work | yes |
-| GNOME | fallback | no |
+| GNOME on Wayland | tested, fallback | yes |
 | X11, any window manager | fallback | no |
 
-Only Hyprland has actually been used. The rest is what the protocol implies,
-not a report from use.
+Hyprland and GNOME on Wayland have actually been used. On GNOME the fallback
+window stays above a fullscreen video, lets clicks through to what is
+underneath, and can be dragged; more than one screen there is untested. The
+rest of the table is what the protocol implies, not a report from use.
 
 ## How it works
 
