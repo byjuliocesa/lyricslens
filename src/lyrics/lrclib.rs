@@ -26,6 +26,14 @@ pub const AGENT: &str = concat!(
 /// How far a search result's duration may sit from the one being played.
 const TOLERANCE: Duration = Duration::from_secs(4);
 
+/// How much longer what is playing may be than the closest recording, when
+/// none is within `TOLERANCE`.
+///
+/// A music video is the album track with an intro or an outro around it: the
+/// same words, a fixed distance away, which a sync by hand puts right. A
+/// recording longer than what is playing has no such excuse.
+const PADDED: Duration = Duration::from_secs(45);
+
 /// One recording the service knows about, as a person would judge it.
 #[derive(Debug, Clone)]
 pub struct Candidate {
@@ -233,16 +241,32 @@ fn best(records: Vec<Record>, duration: Option<Duration>) -> Option<Record> {
         None => with_lyrics.next(),
         Some(duration) => {
             let target = duration.as_secs_f64();
-            with_lyrics
-                .filter(|record| match record.duration {
-                    Some(seconds) => (seconds - target).abs() <= TOLERANCE.as_secs_f64(),
-                    None => false,
-                })
-                .min_by(|a, b| {
-                    let distance =
-                        |record: &Record| (record.duration.unwrap_or_default() - target).abs();
-                    distance(a).total_cmp(&distance(b))
-                })
+            let distance = |record: &Record| (record.duration.unwrap_or(f64::MAX) - target).abs();
+            let closest = |records: Vec<Record>| {
+                records
+                    .into_iter()
+                    .min_by(|a, b| distance(a).total_cmp(&distance(b)))
+            };
+            let (same, other): (Vec<Record>, Vec<Record>) = with_lyrics
+                .filter(|record| record.duration.is_some())
+                .partition(|record| distance(record) <= TOLERANCE.as_secs_f64());
+            closest(same).or_else(|| {
+                let shorter: Vec<Record> = other
+                    .into_iter()
+                    .filter(|record| {
+                        let seconds = record.duration.unwrap_or_default();
+                        seconds < target && target - seconds <= PADDED.as_secs_f64()
+                    })
+                    .collect();
+                let picked = closest(shorter);
+                if picked.is_some() {
+                    tracing::info!(
+                        playing = target,
+                        "no recording of the same length; taking the closest shorter one"
+                    );
+                }
+                picked
+            })
         }
     };
 
@@ -315,6 +339,22 @@ mod tests {
         ];
         let picked = best(records, Some(Duration::from_secs(201))).expect("a match");
         assert_eq!(picked.track_name, "album");
+    }
+
+    #[test]
+    fn a_video_with_an_intro_gets_the_album_track() {
+        let records = vec![
+            record("album", 200.0, Some(SYNCED)),
+            record("extended", 260.0, Some(SYNCED)),
+        ];
+        let picked = best(records, Some(Duration::from_secs(230))).expect("a match");
+        assert_eq!(picked.track_name, "album");
+    }
+
+    #[test]
+    fn a_recording_longer_than_what_plays_is_not_taken_as_padded() {
+        let records = vec![record("extended", 230.0, Some(SYNCED))];
+        assert!(best(records, Some(Duration::from_secs(200))).is_none());
     }
 
     #[test]

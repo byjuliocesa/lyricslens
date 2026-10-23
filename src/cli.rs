@@ -22,6 +22,7 @@ Options:
       --toggle      hide the overlay, or bring it back
       --song        open the whole song in a window
       --position    drag the overlay somewhere else, then press again
+      --sync        the line being sung starts now: fixes this song's timing
       --quit        close the overlay that is running
       --paths       print where the settings, the cache and the log live
       --upgrade     install the newest release over this one
@@ -151,6 +152,7 @@ const FLAGS: &[&str] = &[
     "--toggle",
     "--song",
     "--position",
+    "--sync",
     "--quit",
 ];
 

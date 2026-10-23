@@ -115,6 +115,39 @@ impl Lyrics {
             .collect()
     }
 
+    /// The correction, in milliseconds, that makes line `index` start at
+    /// `reading`: the position as the player reports it, before any
+    /// correction.
+    ///
+    /// The result is in the clock's terms, where a positive correction holds
+    /// the lyrics back. The file's own `[offset:]` stays applied on top, so it
+    /// is taken out here.
+    pub fn correction_to_start(&self, index: usize, reading: Duration) -> Option<i64> {
+        let line = self.lines.get(index)?;
+        let starts = i64::try_from(line.at.as_millis()).ok()? - self.offset_ms;
+        Some(i64::try_from(reading.as_millis()).ok()? - starts)
+    }
+
+    /// The sung line whose start is the smallest change away from the
+    /// correction in force, for when someone says "this line starts now"
+    /// without saying which.
+    ///
+    /// The line they mean is the one nearest to where the lyrics think the
+    /// song is, so it is right while the lyrics are off by less than half the
+    /// gap between two lines.
+    pub fn nearest_line(&self, reading: Duration, correction_ms: i64) -> Option<usize> {
+        self.lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.sung().is_some())
+            .filter_map(|(index, _)| {
+                let needed = self.correction_to_start(index, reading)?;
+                Some((index, needed.abs_diff(correction_ms)))
+            })
+            .min_by_key(|(_, change)| *change)
+            .map(|(index, _)| index)
+    }
+
     /// The file's own `[offset:]`, applied to a position before looking it up.
     fn shifted(&self, position: Duration) -> Duration {
         let offset = Duration::from_millis(self.offset_ms.unsigned_abs());
@@ -209,5 +242,39 @@ mod tests {
     #[test]
     fn an_empty_song_has_no_lines() {
         assert!(Lyrics::default().line_at(Duration::from_secs(1)).is_none());
+    }
+
+    fn ms(n: u64) -> Duration {
+        Duration::from_millis(n)
+    }
+
+    #[test]
+    fn a_line_starting_now_needs_the_gap_between_it_and_the_player() {
+        let song = lrc::parse("[00:10.00]first\n[00:20.00]second");
+        // The player says 12.5 s as "first" begins: the lyrics are 2.5 s early
+        // and have to be held back that much.
+        assert_eq!(song.correction_to_start(0, ms(12_500)), Some(2_500));
+        // Said of "second" at 18 s, they are late and come forward.
+        assert_eq!(song.correction_to_start(1, ms(18_000)), Some(-2_000));
+        assert_eq!(song.correction_to_start(5, ms(18_000)), None);
+    }
+
+    #[test]
+    fn the_files_own_offset_is_taken_out() {
+        let mut song = lrc::parse("[00:10.00]first");
+        song.offset_ms = 500;
+        // The file already moves the line to 9.5 s on the clock.
+        assert_eq!(song.correction_to_start(0, ms(10_000)), Some(500));
+    }
+
+    #[test]
+    fn the_nearest_line_is_the_smallest_change() {
+        let song = lrc::parse("[00:10.00]first\n[00:15.00]\n[00:20.00]second");
+        assert_eq!(song.nearest_line(ms(11_000), 0), Some(0));
+        assert_eq!(song.nearest_line(ms(19_000), 0), Some(2));
+        // With 9 s already in force, 20 s on the player is "first" again.
+        assert_eq!(song.nearest_line(ms(20_000), 9_000), Some(0));
+        // The instrumental gap is never the answer.
+        assert_eq!(song.nearest_line(ms(15_000), 0), Some(0));
     }
 }

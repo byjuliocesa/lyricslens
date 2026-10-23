@@ -21,6 +21,8 @@ pub struct Settings {
     pub hotkey_toggle: String,
     /// The same, for the mode where the overlay can be dragged.
     pub hotkey_position: String,
+    /// The same, for "the line being sung starts now".
+    pub hotkey_sync: String,
     /// Which screen the overlay lives on, by connector name — `HDMI-A-1` and
     /// the like. A layer surface belongs to one screen and cannot be dragged
     /// to another, so it is chosen rather than moved. Absent means whichever
@@ -99,6 +101,7 @@ impl Default for Settings {
             monitor: None,
             hotkey_toggle: String::new(),
             hotkey_position: String::new(),
+            hotkey_sync: String::new(),
             bottom_margin: 100,
             left_margin: None,
             font_size: 30,

@@ -38,8 +38,9 @@ const GRACE: Duration = Duration::from_secs(4);
 /// Wayland gives an ordinary client no way to grab a key combination, so the
 /// hotkey belongs to the compositor. All this program offers is the command
 /// for the compositor to run.
-const COMMANDS: [(&str, &str); 5] = [
+const COMMANDS: [(&str, &str); 6] = [
     ("--toggle", "toggle"),
+    ("--sync", "sync"),
     ("--song", "song"),
     ("--position", "position"),
     ("--settings", "settings"),
@@ -118,6 +119,7 @@ fn main() -> glib::ExitCode {
             current: Rc::new(std::cell::Cell::new(None)),
             track: Rc::new(RefCell::new(String::new())),
             generation: Rc::new(std::cell::Cell::new(0)),
+            sync: Rc::new(std::cell::Cell::new(None)),
         };
 
         let report = Rc::new(RefCell::new(String::new()));
@@ -212,6 +214,10 @@ fn main() -> glib::ExitCode {
         });
 
         glib::timeout_add_local(TICK, move || {
+            let asked = state.borrow().song.sync.take();
+            if let Some(asked) = asked {
+                state.borrow_mut().sync(asked);
+            }
             let state = state.borrow();
             overlay.show(
                 state.before().as_deref(),
@@ -238,6 +244,7 @@ fn ask_for_the_keys(settings: &Settings) {
     for (combination, flag) in [
         (&settings.hotkey_toggle, "--toggle"),
         (&settings.hotkey_position, "--position"),
+        (&settings.hotkey_sync, "--sync"),
     ] {
         if let Err(error) = lyricslens::desktop::bind(combination, flag) {
             tracing::warn!(%error, combination, flag, "the key was not taken");
@@ -315,6 +322,15 @@ fn add_commands(
         let overlay = Rc::clone(overlay);
         move |_, _| overlay.toggle()
     });
+
+    // Taken up by the tick, which holds what the correction is worked out
+    // from.
+    let sync = gio::SimpleAction::new("sync", None);
+    sync.connect_activate({
+        let song = song.clone();
+        move |_, _| song.sync.set(Some(song::SyncTo::Nearest))
+    });
+    application.add_action(&sync);
 
     let position = gio::SimpleAction::new("position", None);
     position.connect_activate({
@@ -478,6 +494,39 @@ impl State {
             &self.title(),
             self.track.length,
         ))
+    }
+
+    /// Corrects the timing of the song playing now so that a line starts at
+    /// this moment, and keeps the correction for this recording.
+    fn sync(&mut self, asked: song::SyncTo) {
+        let (Some(lyrics), Some(reading), Some(key)) = (
+            self.lyrics.as_ref(),
+            self.clock.raw_position(Instant::now()),
+            self.track_key(),
+        ) else {
+            tracing::info!("nothing playing with lyrics to sync");
+            return;
+        };
+        let current = self.settings.offset_for(&self.player, Some(&key));
+        let index = match asked {
+            song::SyncTo::Line(index) => Some(index),
+            song::SyncTo::Nearest => lyrics.nearest_line(reading, current),
+        };
+        let Some(correction) = index.and_then(|index| lyrics.correction_to_start(index, reading))
+        else {
+            return;
+        };
+
+        // Read again first: the preferences window may have saved since this
+        // copy was taken, and writing it back would undo that.
+        let mut settings = Settings::load();
+        settings.set_track_offset_ms(&key, correction);
+        if let Err(error) = settings.save() {
+            tracing::warn!(%error, "could not save the correction");
+        }
+        self.settings = settings;
+        tracing::info!(line = ?index, correction, was = current, "synced by hand");
+        self.apply_offset();
     }
 
     /// Points the clock at whichever correction applies: this recording's, or

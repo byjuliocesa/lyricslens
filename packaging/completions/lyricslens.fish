@@ -10,6 +10,7 @@ for command in lyricslens lls
     complete -c $command -l toggle -d 'hide the overlay, or bring it back'
     complete -c $command -l song -d 'open the whole song in a window'
     complete -c $command -l position -d 'drag the overlay somewhere else, then press again'
+    complete -c $command -l sync -d "the line being sung starts now: fixes this song's timing"
     complete -c $command -l quit -d 'close the overlay that is running'
     complete -c $command -l paths -d 'print where the settings, the cache and the log live'
     complete -c $command -l upgrade -d 'install the newest release over this one'

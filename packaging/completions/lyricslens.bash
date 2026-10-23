@@ -3,7 +3,7 @@
 _lyricslens() {
     local current=${COMP_WORDS[COMP_CWORD]}
     # The program takes options only, never a file.
-    COMPREPLY=($(compgen -W "--help --version --foreground --settings --toggle --song --position --quit --paths --upgrade --uninstall" -- "$current"))
+    COMPREPLY=($(compgen -W "--help --version --foreground --settings --toggle --song --position --sync --quit --paths --upgrade --uninstall" -- "$current"))
 }
 
 complete -F _lyricslens lyricslens lls

@@ -139,7 +139,8 @@ impl Clock {
         Some(shift(position, self.offset_ms))
     }
 
-    fn raw_position(&self, now: Instant) -> Option<Duration> {
+    /// Where the song is as the player has it, before the manual offset.
+    pub fn raw_position(&self, now: Instant) -> Option<Duration> {
         if self.state != Playback::Playing {
             return self.frozen;
         }
