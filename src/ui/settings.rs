@@ -618,8 +618,21 @@ fn shortcuts(ctx: &Ctx) -> adw::PreferencesGroup {
         }
     });
 
+    let sync = adw::EntryRow::builder()
+        .title(t("Sync to the Line Being Sung"))
+        .text(ctx.get(|s| s.hotkey_sync.clone()))
+        .build();
+    sync.connect_changed({
+        let ctx = ctx.clone();
+        move |row| {
+            ctx.change(|s| s.hotkey_sync = row.text().trim().to_owned());
+            ask_for(&ctx.get(|s| s.hotkey_sync.clone()), "--sync");
+        }
+    });
+
     keys.add(&toggle);
     keys.add(&movement);
+    keys.add(&sync);
     keys.add(&line);
     keys
 }

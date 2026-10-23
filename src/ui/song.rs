@@ -33,6 +33,18 @@ pub struct Feed {
     pub current: Rc<Cell<Option<usize>>>,
     pub track: Rc<RefCell<String>>,
     pub generation: Rc<Cell<u64>>,
+    /// A request to correct the timing, left here for whoever follows the
+    /// player to pick up on its next tick.
+    pub sync: Rc<Cell<Option<SyncTo>>>,
+}
+
+/// Which line is being sung at the moment of asking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncTo {
+    /// The one nearest to where the lyrics think the song is.
+    Nearest,
+    /// This one, by its place in the song.
+    Line(usize),
 }
 
 const STYLE: &str = "window.lyricslens-song .line {
@@ -44,7 +56,8 @@ const STYLE: &str = "window.lyricslens-song .line {
          font-weight: 700;
          font-size: 17px;
      }
-     window.lyricslens-song .gap { opacity: 0.25; }";
+     window.lyricslens-song .gap { opacity: 0.25; }
+     window.lyricslens-song .line:hover { text-decoration: underline; }";
 
 pub fn show(app: &adw::Application, feed: Feed) {
     let window = adw::Window::builder()
@@ -84,6 +97,17 @@ pub fn show(app: &adw::Application, feed: Feed) {
         .build();
     empty.add_css_class("dim-label");
 
+    let hint = gtk::Label::builder()
+        .label(t("Out of time? Click the line being sung right now"))
+        .wrap(true)
+        .margin_top(6)
+        .margin_start(18)
+        .margin_end(18)
+        .xalign(0.0)
+        .build();
+    hint.add_css_class("dim-label");
+    hint.add_css_class("caption");
+
     let scrolled = gtk::ScrolledWindow::builder()
         .hscrollbar_policy(gtk::PolicyType::Never)
         .vexpand(true)
@@ -95,6 +119,7 @@ pub fn show(app: &adw::Application, feed: Feed) {
         .orientation(gtk::Orientation::Vertical)
         .build();
     page.append(&header);
+    page.append(&hint);
     page.append(&empty);
     page.append(&scrolled);
     window.set_content(Some(&page));
@@ -114,9 +139,10 @@ pub fn show(app: &adw::Application, feed: Feed) {
                 shown.set(feed.generation.get());
                 heading.set_text(&feed.track.borrow());
                 lit.set(None);
-                fill(&column, &rows, feed.lyrics.borrow().as_ref());
+                fill(&column, &rows, feed.lyrics.borrow().as_ref(), &feed.sync);
                 let any = !rows.borrow().is_empty();
                 scrolled.set_visible(any);
+                hint.set_visible(any);
                 empty.set_visible(!any);
             }
 
@@ -147,14 +173,22 @@ pub fn show(app: &adw::Application, feed: Feed) {
 
 /// Builds one row per line, instrumental gaps included, so a row's place in
 /// the list is the line's place in the song.
-fn fill(column: &gtk::Box, rows: &Rc<RefCell<Vec<gtk::Label>>>, lyrics: Option<&Lyrics>) {
+///
+/// A click on a line says it is the one being sung right now, and the timing
+/// is corrected to match.
+fn fill(
+    column: &gtk::Box,
+    rows: &Rc<RefCell<Vec<gtk::Label>>>,
+    lyrics: Option<&Lyrics>,
+    sync: &Rc<Cell<Option<SyncTo>>>,
+) {
     while let Some(child) = column.first_child() {
         column.remove(&child);
     }
     rows.borrow_mut().clear();
 
     let Some(lyrics) = lyrics else { return };
-    for line in &lyrics.lines {
+    for (index, line) in lyrics.lines.iter().enumerate() {
         let label = gtk::Label::builder()
             .label(line.sung().unwrap_or("♪"))
             .wrap(true)
@@ -163,6 +197,14 @@ fn fill(column: &gtk::Box, rows: &Rc<RefCell<Vec<gtk::Label>>>, lyrics: Option<&
         label.add_css_class("line");
         if line.sung().is_none() {
             label.add_css_class("gap");
+        } else {
+            label.set_tooltip_text(Some(&t("This line is being sung now")));
+            let click = gtk::GestureClick::new();
+            click.connect_released({
+                let sync = sync.clone();
+                move |_, _, _, _| sync.set(Some(SyncTo::Line(index)))
+            });
+            label.add_controller(click);
         }
         column.append(&label);
         rows.borrow_mut().push(label);
