@@ -83,10 +83,10 @@ pub fn show(app: &adw::Application, search: Option<Search>) {
         .default_height(760)
         .build();
 
+    window.add(&general_page(&ctx, search.as_ref()));
     window.add(&appearance_page(&ctx));
     window.add(&lyrics_page(&ctx, search.as_ref()));
     window.add(&position_page(&ctx));
-    window.add(&general_page(&ctx, search.as_ref()));
 
     window.connect_close_request(move |_| {
         preview.detach();
