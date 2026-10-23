@@ -39,6 +39,59 @@ pub trait Player {
     fn position(&self) -> zbus::Result<i64>;
 }
 
+/// The part of the root interface that names the player for people.
+#[proxy(
+    interface = "org.mpris.MediaPlayer2",
+    default_path = "/org/mpris/MediaPlayer2"
+)]
+pub trait Root {
+    #[zbus(property)]
+    fn identity(&self) -> zbus::Result<String>;
+}
+
+/// A player that can be chosen to follow.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Choice {
+    /// What is stored in the settings and matched against the bus name: the
+    /// short name, which a browser keeps across restarts while its instance
+    /// number changes.
+    pub key: String,
+    /// What the player calls itself, such as `Spotify`.
+    pub name: String,
+    pub playing: bool,
+}
+
+/// Every player on the bus right now, one per application.
+pub async fn choices(connection: &Connection) -> Result<Vec<Choice>, Error> {
+    let mut found: Vec<Choice> = Vec::new();
+    for bus in list(connection).await? {
+        let key = short_name(&bus).to_owned();
+        let name = match RootProxy::builder(connection)
+            .destination(bus.clone())?
+            .build()
+            .await
+        {
+            Ok(root) => root.identity().await.unwrap_or_else(|_| key.clone()),
+            Err(_) => key.clone(),
+        };
+        let playing = match PlayerProxy::builder(connection)
+            .destination(bus.clone())?
+            .build()
+            .await
+        {
+            Ok(player) => player.playback_status().await.as_deref() == Ok("Playing"),
+            Err(_) => false,
+        };
+        // Two windows of the same browser are one choice, since the setting
+        // cannot tell them apart.
+        match found.iter_mut().find(|choice| choice.key == key) {
+            Some(same) => same.playing |= playing,
+            None => found.push(Choice { key, name, playing }),
+        }
+    }
+    Ok(found)
+}
+
 /// Bus names of every running MPRIS player, in the order the bus returns them.
 pub async fn list(connection: &Connection) -> Result<Vec<OwnedBusName>, Error> {
     let bus = DBusProxy::new(connection).await?;

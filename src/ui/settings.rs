@@ -20,6 +20,7 @@ use crate::i18n::{count, t};
 use crate::lyrics::lrclib::Candidate;
 use crate::lyrics::normalize::from_track;
 use crate::media::Track;
+use crate::media::mpris::Choice;
 use crate::store::autostart;
 use crate::store::settings::Settings;
 
@@ -31,6 +32,8 @@ use crate::store::settings::Settings;
 pub struct Search {
     pub requests: async_channel::Sender<Request>,
     pub candidates: async_channel::Receiver<Vec<Candidate>>,
+    /// The answers to [`Request::Players`].
+    pub players: async_channel::Receiver<Vec<Choice>>,
     pub playing: Rc<RefCell<Track>>,
     /// What became of the automatic search for the track playing now.
     pub report: Rc<RefCell<String>>,
@@ -621,23 +624,7 @@ fn shortcuts(ctx: &Ctx) -> adw::PreferencesGroup {
 fn general_page(ctx: &Ctx, search: Option<&Search>) -> adw::PreferencesPage {
     let page = page("General", "preferences-system-symbolic");
 
-    let player = group(
-        "Player",
-        "When several players are open, follow the one whose name contains this, such as spotify",
-    );
-    let name = adw::EntryRow::builder()
-        .title(t("Player Name"))
-        .text(ctx.get(|s| s.player.clone()).unwrap_or_default())
-        .build();
-    name.connect_changed({
-        let ctx = ctx.clone();
-        move |row| {
-            let text = row.text().trim().to_owned();
-            ctx.change(|s| s.player = (!text.is_empty()).then_some(text));
-        }
-    });
-    player.add(&name);
-    page.add(&player);
+    page.add(&player_choice(ctx, search));
 
     let startup = group("Startup", "");
     let login = adw::SwitchRow::builder()
@@ -681,6 +668,125 @@ fn general_page(ctx: &Ctx, search: Option<&Search>) -> adw::PreferencesPage {
     page.add(&close);
 
     page
+}
+
+/// Which player to follow, chosen from the ones open right now.
+///
+/// The choice is kept by the player's short name and holds until it is
+/// changed: with the chosen player closed, the overlay waits for it instead of
+/// following whatever else is playing.
+fn player_choice(ctx: &Ctx, search: Option<&Search>) -> adw::PreferencesGroup {
+    let player = group(
+        "Player",
+        "Which player the lyrics follow when more than one is open",
+    );
+
+    let saved = ctx.get(|s| s.player.clone());
+    let labels = gtk::StringList::new(&[&t("Whichever is playing")]);
+    let keys: Rc<RefCell<Vec<Option<String>>>> = Rc::new(RefCell::new(vec![None]));
+    if let Some(saved) = &saved {
+        labels.append(saved);
+        keys.borrow_mut().push(Some(saved.clone()));
+    }
+    let row = adw::ComboRow::builder()
+        .title(t("Follow"))
+        .model(&labels)
+        .selected(u32::from(saved.is_some()))
+        .build();
+
+    // Set while the list is rebuilt, which moves the selection without anyone
+    // choosing anything.
+    let filling = Rc::new(std::cell::Cell::new(false));
+    row.connect_selected_notify({
+        let ctx = ctx.clone();
+        let keys = keys.clone();
+        let filling = filling.clone();
+        let requests = search.map(|search| search.requests.clone());
+        move |row| {
+            if filling.get() {
+                return;
+            }
+            let chosen = keys
+                .borrow()
+                .get(row.selected() as usize)
+                .cloned()
+                .flatten();
+            ctx.change(|s| s.player = chosen.clone());
+            if let Some(requests) = requests.clone() {
+                glib::spawn_future_local(async move {
+                    let _ = requests.send(Request::Follow(chosen)).await;
+                });
+            }
+        }
+    });
+    player.add(&row);
+
+    let Some(search) = search.cloned() else {
+        return player;
+    };
+    let refresh = gtk::Button::builder()
+        .icon_name("view-refresh-symbolic")
+        .tooltip_text(t("Look again"))
+        .valign(gtk::Align::Center)
+        .build();
+    refresh.add_css_class("flat");
+    player.set_header_suffix(Some(&refresh));
+
+    let ctx = ctx.clone();
+    let look = move || {
+        let search = search.clone();
+        let labels = labels.clone();
+        let keys = keys.clone();
+        let filling = filling.clone();
+        let row = row.clone();
+        let ctx = ctx.clone();
+        glib::spawn_future_local(async move {
+            if search.requests.send(Request::Players).await.is_err() {
+                return;
+            }
+            let Ok(open) = search.players.recv().await else {
+                return;
+            };
+            let saved = ctx.get(|s| s.player.clone());
+
+            let mut names = vec![t("Whichever is playing")];
+            let mut found = vec![None];
+            for choice in &open {
+                names.push(if choice.playing {
+                    format!("{} ({})", choice.name, t("playing"))
+                } else {
+                    choice.name.clone()
+                });
+                found.push(Some(choice.key.clone()));
+            }
+            // A choice whose player is closed stays chosen, and says so.
+            let selected = match &saved {
+                None => 0,
+                Some(saved) => match open
+                    .iter()
+                    .position(|choice| choice.key.contains(saved.as_str()))
+                {
+                    Some(index) => index + 1,
+                    None => {
+                        names.push(format!("{saved} ({})", t("not open")));
+                        found.push(Some(saved.clone()));
+                        names.len() - 1
+                    }
+                },
+            };
+
+            filling.set(true);
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            labels.splice(0, labels.n_items(), &names);
+            *keys.borrow_mut() = found;
+            row.set_selected(u32::try_from(selected).unwrap_or(0));
+            filling.set(false);
+        });
+    };
+    look();
+    refresh.connect_clicked(move |_| look());
+
+    player
 }
 
 /// Writes the settings down and tells the overlay to read them again.
