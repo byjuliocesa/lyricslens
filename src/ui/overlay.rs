@@ -55,7 +55,11 @@ const POSITIONING: &str = "positioning";
 /// the preferences window, which then has no background and enormous text.
 const OVERLAY: &str = "lyricslens-overlay";
 
-fn style(settings: &Settings) -> String {
+/// The overlay's look as CSS, scoped to `scope`.
+///
+/// The preferences window draws a preview with the same rules under its own
+/// class, so what it shows cannot drift from what the overlay does.
+pub(crate) fn style(settings: &Settings, scope: &str) -> String {
     let shadow = if settings.text_shadow {
         "text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);"
     } else {
@@ -79,36 +83,36 @@ fn style(settings: &Settings) -> String {
     };
 
     format!(
-        "window.{OVERLAY} {{ background: transparent; }}
-         window.{OVERLAY} .lines {{ {strip} padding: 10px 24px; }}
-         window.{OVERLAY}.{POSITIONING} .lines {{
+        "{scope} {{ background: transparent; }}
+         {scope} .lines {{ {strip} padding: 10px 24px; }}
+         {scope}.{POSITIONING} .lines {{
              background: rgba(0, 0, 0, 0.55);
              border: 2px dashed rgba(255, 255, 255, 0.75);
              border-radius: 14px;
          }}
-         window.{OVERLAY} .pixel {{ background: rgba(0, 0, 0, 0.01); }}
-         window.{OVERLAY} label.track {{
+         {scope} .pixel {{ background: rgba(0, 0, 0, 0.01); }}
+         {scope} label.track {{
              font-size: {small}px;
              font-weight: 400;
              opacity: 0.6;
              margin-bottom: 4px;
          }}
-         window.{OVERLAY} picture.art {{
+         {scope} picture.art {{
              border-radius: 8px;
              margin-right: 14px;
          }}
-         window.{OVERLAY} progressbar.elapsed {{ margin-top: 8px; }}
-         window.{OVERLAY} progressbar.elapsed trough {{
+         {scope} progressbar.elapsed {{ margin-top: 8px; }}
+         {scope} progressbar.elapsed trough {{
              min-height: 3px;
              border-radius: 3px;
              background: rgba(255, 255, 255, 0.18);
          }}
-         window.{OVERLAY} progressbar.elapsed progress {{
+         {scope} progressbar.elapsed progress {{
              min-height: 3px;
              border-radius: 3px;
              background: {color};
          }}
-         window.{OVERLAY} label {{
+         {scope} label {{
              color: {color};
              font-size: {size}px;
              font-weight: {weight};
@@ -300,7 +304,7 @@ impl Overlay {
         let display = gtk::gdk::Display::default().ok_or(Error::NoDisplay)?;
 
         let provider = CssProvider::new();
-        provider.load_from_string(&style(settings));
+        provider.load_from_string(&style(settings, &format!("window.{OVERLAY}")));
         gtk::style_context_add_provider_for_display(
             &display,
             &provider,
@@ -725,7 +729,8 @@ impl Overlay {
 
     /// Takes the settings again, after the preferences window changed them.
     pub fn reload(&self, settings: &Settings) {
-        self.provider.load_from_string(&style(settings));
+        self.provider
+            .load_from_string(&style(settings, &format!("window.{OVERLAY}")));
         self.shape(settings);
         let movable = settings.movable;
         {

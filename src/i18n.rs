@@ -36,6 +36,15 @@ pub fn t(english: &str) -> String {
         .unwrap_or_else(|| english.to_owned())
 }
 
+/// A sentence with a count in it, `{n}` standing for the number.
+///
+/// Whole sentences, one for one and one for the rest, rather than a number
+/// glued to a phrase: the phrase has to agree with the number in every
+/// language there is a file for.
+pub fn count(n: usize, one: &str, many: &str) -> String {
+    t(if n == 1 { one } else { many }).replace("{n}", &n.to_string())
+}
+
 /// The language the session asks for, as a lowercase code such as `pt_br`,
 /// or `None` when it asks for English or for nothing in particular.
 ///
@@ -151,6 +160,24 @@ mod tests {
 
         unsafe { std::env::remove_var("LC_ALL") };
         let _ = std::fs::remove_dir_all(&locale);
+    }
+
+    /// Sentences no file translates, so the result does not depend on the
+    /// language of the machine running the tests.
+    #[test]
+    fn a_count_picks_the_sentence_for_its_number() {
+        assert_eq!(
+            count(1, "{n} test apple", "{n} test apples"),
+            "1 test apple"
+        );
+        assert_eq!(
+            count(3, "{n} test apple", "{n} test apples"),
+            "3 test apples"
+        );
+        assert_eq!(
+            count(0, "{n} test apple", "{n} test apples"),
+            "0 test apples"
+        );
     }
 
     /// Every built-in file parses, and none of them is missing a sentence the
